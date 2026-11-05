@@ -1,0 +1,146 @@
+{
+  "name": "Workflow para agente de triagem de pedidos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "a481a66e-e45f-438f-9212-d57f7c028de5",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c3e8ee58-8daf-4f76-911e-0065c320fec7",
+      "name": "Webhook",
+      "webhookId": "a481a66e-e45f-438f-9212-d57f7c028de5"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analise a seguinte reclamação: {{ $json.body.reclamacao }}",
+        "options": {
+          "systemMessage": "Você é um Agente Autônomo de Operações e Risco do iFood.\nSua função é analisar reclamações, consultar obrigatoriamente a ferramenta `consultar_sistema_pedidos` quando houver um número de pedido no texto e emitir uma decisão executiva EXCLUSIVAMENTE em JSON válido.\n\nREGRAS DE ALÇADA E NEGÓCIO:\n1. Se o cliente citar um número de pedido, chame a tool `consultar_sistema_pedidos` antes de responder.\n2. Se `sla_estourado` for true E `risco_fraude` for \"Baixo\", aprove o estorno automático ou cupom.\n3. Se `risco_fraude` for \"Alto\", bloqueie o reembolso automático e encaminhe para auditoria humana.\n\nESTRUTURA EXATA DO JSON DE SAÍDA (sem blocos markdown ```json, apenas o objeto puro):\n{\n  \"categoria\": \"Resumo do problema em até 4 palavras\",\n  \"nivel_urgencia\": 5,\n  \"setor_responsavel\": \"Logística | Financeiro | Suporte Técnico | Prevenção a Fraudes\",\n  \"sugestao_resposta\": \"Plano de ação direto para o operador baseando-se nos dados reais da tool\",\n  \"decisao_alcada\": \"Ex: Estorno Automático Aprovado (R$ 84,90) | Bloqueado por Risco de Fraude | Sem Pedido Vinculado\",\n  \"telemetria_pedido\": {\n    \"pedido_id\": \"9988\",\n    \"restaurante\": \"Nome do restaurante ou Não identificado\",\n    \"valor\": \"R$ 84,90\",\n    \"status_logistico\": \"Resumo do GPS e atraso\",\n    \"perfil_risco\": \"Resumo do cliente e risco de fraude\"\n  }\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "86f69c65-752d-48a0-8ac2-7f6ef2b5c378",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        32,
+        208
+      ],
+      "id": "49581cb2-40e5-42d7-83dd-84bb6c483ddb",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Hpy77oJIFnFBac3X",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Use esta ferramenta SEMPRE que o cliente mencionar o número de um pedido. Passe apenas os números do pedido (ex: 1221) na variável query para buscar status do entregador, valor, restaurante e perfil do cliente.",
+        "jsCode": "const rawQuery = $fromAI(\"query\", \"Número do pedido citado pelo cliente\");\nconst orderId = String(rawQuery).replace(/\\D/g, \"\") || \"0000\";\n\nconst mockDatabase = {\n  \"9988\": {\n    pedido_id: \"9988\",\n    restaurante: \"Burger Lab Gourmet\",\n    valor_total: 84.90,\n    tempo_atraso_min: 125,\n    status_gps_entregador: \"Parado há 40 min a 2.3km do destino\",\n    cliente_vip: true,\n    risco_fraude: \"Baixo (0 reembolsos nos últimos 90 dias)\",\n    sla_estourado: true\n  },\n  \"1020\": {\n    pedido_id: \"1020\",\n    restaurante: \"Sushi Express Paulista\",\n    valor_total: 210.00,\n    tempo_atraso_min: 15,\n    status_gps_entregador: \"Em rota - 400m do cliente\",\n    cliente_vip: false,\n    risco_fraude: \"Alto (4 reembolsos solicitados na última semana)\",\n    sla_estourado: false\n  }\n};\n\nconst resultado = mockDatabase[orderId] || {\n  pedido_id: orderId,\n  restaurante: \"Parceiro iFood #\" + orderId.slice(0, 2),\n  valor_total: 62.50,\n  tempo_atraso_min: 55,\n  status_gps_entregador: \"Rota em atraso moderado\",\n  cliente_vip: true,\n  risco_fraude: \"Baixo\",\n  sla_estourado: true\n};\n\nreturn JSON.stringify(resultado);"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        320
+      ],
+      "id": "d111e639-ba40-4007-adc4-6a6c3362037d",
+      "name": "Code Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawOutput = $input.first().json.output || \"{}\";\nconst cleanJsonString = rawOutput.replace(/```json\\n?|```/g, \"\").trim();\n\nlet parsedData;\ntry {\n  parsedData = JSON.parse(cleanJsonString);\n} catch (e) {\n  parsedData = { erro_parse: rawOutput };\n}\n\nreturn [\n  {\n    json: {\n      protocolo: \"IFD-\" + Math.floor(100000 + Math.random() * 900000),\n      timestamp: new Date().toLocaleTimeString(\"pt-BR\"),\n      ...parsedData\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        0
+      ],
+      "id": "98ce8ea2-709b-4dba-ac66-c9b7213fb0a9",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9e7d3ed9-9b7c-41a9-adbb-05e184ec1556",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a68b700d7f304575f565044534c5d615a078c6d2375f353b2c6d9082b37c9565"
+  },
+  "nodeGroups": [],
+  "id": "GIXVL2cHoedzOf3I",
+  "tags": []
+}
