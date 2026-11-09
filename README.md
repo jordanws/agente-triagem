@@ -1,6 +1,6 @@
 # Agente de Triagem com IA (Ifood delivery)
 
-🔗 **Demo ao vivo (24/7):** https://ifood-ops.vercel.app
+🔗 **Demo ao vivo (24/7):** https://ifood-ops.vercel.app (instável devido ao alta demanda da API do Gemini - funciona melhor com n8n, mas atualmente apresenta os dados mockados)
 
 Sistema de triagem automática e análise de risco para operações de delivery. O agente analisa a reclamação do cliente, consulta a telemetria do pedido via *Tool Calling* e define a alçada de atendimento (estorno automático, cupom ou bloqueio por fraude).
 
