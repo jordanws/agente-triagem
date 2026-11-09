@@ -1,4 +1,4 @@
-# 🍔 iFood Ops - Agente de Triagem com IA
+# Agente de Triagem com IA (Ifood delivery)
 
 🔗 **Demo ao vivo (24/7):** https://ifood-ops.vercel.app
 
